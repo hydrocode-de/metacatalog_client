@@ -6,7 +6,7 @@ import httpx
 class Client(BaseModel):
     url: HttpUrl = "http://localhost:8001/"
     host_version: str = Field(default=None, init=False)
-    _static_info: dict = Field(default={}, init=False, repr=False)
+    static_info: dict = Field(default={}, init=False, repr=False)
 
     @field_validator("url", mode="before")
     def validate_url(cls, url):
@@ -32,12 +32,12 @@ class Client(BaseModel):
         """
         """
         if author is not None:
-            self._static_info.update(author=author)
+            self.static_info.update(author=author)
         if license is not None:    
-            self._static_info.update(license=license)
+            self.static_info.update(license=license)
     
     def reset_static(self):
-        self._static_info = {}
+        self.static_info = {}
 
     def authors(self, limit: int = 10):
         response = httpx.get(f"{self.url}authors.json", params=dict(limit=limit))
@@ -80,10 +80,10 @@ class Client(BaseModel):
         **kwargs,
     ):
         # the author or license can be set as a static property to this instance
-        if 'author' in self._static_info:
-            author = self._static_info['author']
-        if 'license' in self._static_info:
-            license = self._static_info['license']
+        if 'author' in self.static_info:
+            author = self.static_info['author']
+        if 'license' in self.static_info:
+            license = self.static_info['license']
         
         if author is None:
             raise ValueError("author must be set")
