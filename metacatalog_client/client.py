@@ -83,7 +83,11 @@ class Client(BaseModel):
         return self.output.parse(response=response)
 
     def variable(self, id: int) -> dict:
-        response = httpx.get(f"{self.url}variables/{id}.json")
+        if self.host_version > '0.3.8':
+            url = f"{self.url}variables/{id}.json"
+        else:
+            url = f"{self.url}variable/{id}.json"
+        response = httpx.get(url)
         return response.json()
 
     def entries(self, title: str = None, description: str = None, variable: str = None, limit: int = 10, offset: int = 0):
