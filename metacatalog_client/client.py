@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from pydantic import BaseModel, Field, field_validator
 from pydantic import HttpUrl
 import httpx
@@ -50,6 +52,18 @@ class Client(BaseModel):
 
     def _sanitize_params(self, **params: dict) -> dict:
         return {k: v for k, v in params.items() if v is not None}
+
+    def _sanitize_json(self, **params: dict) -> dict:
+        def serializer(val):
+            if isinstance(val, dict):
+                return {k: serializer(v) for k, v in val.items() if v is not None}
+            elif isinstance(val, datetime):
+                return val.isoformat()
+            elif isinstance(val, timedelta):
+                return f"P{val.days}DT{val.total_seconds()}S"
+            return val
+        
+        return {k: serializer(v) for k, v in params.items() if v is not None}
 
     def set_static(self, author: int | dict = None, license: int | dict = None):
         """
@@ -166,5 +180,9 @@ class Client(BaseModel):
             groups=groups
         )
 
-        response = httpx.post(f"{self.url}entries", json=payload, params=self._sanitize_params(duplicate_authors=duplicate_authors))
+        response = httpx.post(
+            f"{self.url}entries", 
+            json=self._sanitize_json(**payload), 
+            params=self._sanitize_params(duplicate_authors=duplicate_authors)
+        )
         return response.json()
