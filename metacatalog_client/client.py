@@ -8,6 +8,11 @@ from .output import Output, JSONOutput, CSVOutput
 
 MIN_HOST_VERSION = "0.3.8"
 
+def remote_is_outdated(remote_version: str) -> bool:
+    min_version = tuple(map(int, MIN_HOST_VERSION.split('.')))
+    remote_version = tuple(map(int, remote_version.split('.')))
+    return remote_version > min_version
+
 class Client(BaseModel):
     url: HttpUrl = "http://localhost:8001/"
     host_version: str = Field(default=None, init=False)
@@ -47,7 +52,7 @@ class Client(BaseModel):
                 f"The host at {self.url}version did not response with a valid 'metacatalog_api' version."
             )
 
-        if self.host_version < MIN_HOST_VERSION:
+        if remote_is_outdated(self.host_version):
             raise RuntimeError(f"The host at {self.url} runs on version: '{self.host_version}', but this client requires at least version: '{MIN_HOST_VERSION}'")
 
     def _sanitize_params(self, **params: dict) -> dict:
@@ -151,9 +156,9 @@ class Client(BaseModel):
         **kwargs,
     ):
         # the author or license can be set as a static property to this instance
-        if 'author' in self.static_info:
+        if 'author' in self.static_info and author is None:
             author = self.static_info['author']
-        if 'license' in self.static_info:
+        if 'license' in self.static_info and license is None:
             license = self.static_info['license']
         
         if author is None:
