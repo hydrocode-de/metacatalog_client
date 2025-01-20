@@ -11,7 +11,7 @@ MIN_HOST_VERSION = "0.3.8"
 def remote_is_outdated(remote_version: str) -> bool:
     min_version = tuple(map(int, MIN_HOST_VERSION.split('.')))
     remote_version = tuple(map(int, remote_version.split('.')))
-    return remote_version > min_version
+    return remote_version < min_version
 
 class Client(BaseModel):
     url: HttpUrl = "http://localhost:8001/"
