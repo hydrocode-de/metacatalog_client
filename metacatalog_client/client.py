@@ -1,12 +1,16 @@
+import os
+import platform
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic import HttpUrl
 import httpx
 
-from .output import Output, JSONOutput, CSVOutput
+from metacatalog_client.output import Output, JSONOutput, CSVOutput
+from metacatalog_client.__version__ import __version__
 
 MIN_HOST_VERSION = "0.3.8"
+METACATALOG_TOKEN = os.environ.get('METACATALOG_TOKEN', '')
 
 def remote_is_outdated(remote_version: str) -> bool:
     min_version = tuple(map(int, MIN_HOST_VERSION.split('.')))
@@ -17,6 +21,7 @@ class Client(BaseModel):
     url: HttpUrl = "http://localhost:8001/"
     host_version: str = Field(default=None, init=False)
     static_info: dict = Field(default={}, init=False, repr=False)
+    api_token: str = METACATALOG_TOKEN
 
     output: Output = Field(default_factory=JSONOutput)
 
@@ -40,7 +45,7 @@ class Client(BaseModel):
         
     def model_post_init(self, __context):
         try:
-            response = httpx.get(f"{self.url}version")
+            response = httpx.get(f"{self.url}version", headers=self.headers)
             version = response.json()
             self.host_version = version["metacatalog_api"]
         except httpx.ConnectError:
@@ -54,6 +59,18 @@ class Client(BaseModel):
 
         if remote_is_outdated(self.host_version):
             raise RuntimeError(f"The host at {self.url} runs on version: '{self.host_version}', but this client requires at least version: '{MIN_HOST_VERSION}'")
+
+    @property
+    def headers(self):
+        headers = {
+                'Accept': 'application/json',
+                'User-Agent': f'metacatalog-client/{__version__} {platform.platform()} Python/{platform.python_version()}'
+            }
+        
+        if self.api_token != '':
+            headers['X-API-Key'] = self.api_token
+
+        return headers
 
     def _sanitize_params(self, **params: dict) -> dict:
         return {k: v for k, v in params.items() if v is not None}
@@ -82,23 +99,23 @@ class Client(BaseModel):
         self.static_info = {}
 
     def authors(self, search: str = None, limit: int = 10):
-        response = httpx.get(f"{self.url}authors.json", params=self._sanitize_params(limit=limit, search=search))
+        response = httpx.get(f"{self.url}authors.json", params=self._sanitize_params(limit=limit, search=search), headers=self.headers)
         return self.output.parse(response)
 
     def author(self, id: int, name: str = None) -> dict:
         if id is not None:
-            response = httpx.get(f"{self.url}authors/{id}.json")
+            response = httpx.get(f"{self.url}authors/{id}.json", headers=self.headers)
             return response.json()
         elif name is not None:
-            response = httpx.get(f"{self.url}author.json", params=self._sanitize_params(name=name))
+            response = httpx.get(f"{self.url}author.json", params=self._sanitize_params(name=name), headers=self.headers)
             return response.json()
 
     def licenses(self, limit: int = None):
-        response = httpx.get(f"{self.url}licenses.json", params=self._sanitize_params(limit=limit))
+        response = httpx.get(f"{self.url}licenses.json", params=self._sanitize_params(limit=limit), headers=self.headers)
         return self.output.parse(response=response)
     
     def variables(self, only_available: bool = False, limit: int = None):
-        response = httpx.get(f"{self.url}variables.json", params=self._sanitize_params(limit=limit, only_available=only_available))
+        response = httpx.get(f"{self.url}variables.json", params=self._sanitize_params(limit=limit, only_available=only_available), headers=self.headers)
         return self.output.parse(response=response)
 
     def variable(self, id: int) -> dict:
@@ -106,34 +123,34 @@ class Client(BaseModel):
             url = f"{self.url}variables/{id}.json"
         else:
             url = f"{self.url}variable/{id}.json"
-        response = httpx.get(url)
+        response = httpx.get(url, headers=self.headers)
         return response.json()
 
     def entries(self, title: str = None, description: str = None, variable: str = None, limit: int = 10, offset: int = 0):
         params = self._sanitize_params(title=title, description=description, variable=variable, limit=limit, offset=offset)
-        response = httpx.get(f"{self.url}entries.json", params=params)
+        response = httpx.get(f"{self.url}entries.json", params=params, headers=self.headers)
         return self.output.parse(response=response)
 
     def search(self, prompt: str, limit: int = 10):
         params = self._sanitize_params(search=prompt, limit=limit, full_text=True)
-        response = httpx.get(f"{self.url}entries.json", params=params)
+        response = httpx.get(f"{self.url}entries.json", params=params, headers=self.headers)
         return self.output.parse(response=response)
     
     def entry(self, entry_id: int):
-        response = httpx.get(f"{self.url}entries/{entry_id}.json")
+        response = httpx.get(f"{self.url}entries/{entry_id}.json", headers=self.headers)
         return response.json()
     
     def group_types(self):
-        response = httpx.get(f"{self.url}group-types.json")
+        response = httpx.get(f"{self.url}group-types.json", headers=self.headers)
         return self.output.parse(response=response)
     
     def groups(self, title: str = None, description: str = None, type: str = None, limit: int = None, offset: int = None):
         params = self._sanitize_params(title=title, description=description, type=type, limit=limit, offset=offset)
-        response = httpx.get(f"{self.url}groups.json", params=params)
+        response = httpx.get(f"{self.url}groups.json", params=params, headers=self.headers)
         return self.output.parse(response=response)
     
     def group(self, id: int):
-        response = httpx.get(f"{self.url}groups/{id}.json")
+        response = httpx.get(f"{self.url}groups/{id}.json", self.headers)
         return response.json()
 
     def create_entry(
@@ -188,6 +205,7 @@ class Client(BaseModel):
         response = httpx.post(
             f"{self.url}entries", 
             json=self._sanitize_json(**payload), 
-            params=self._sanitize_params(duplicate_authors=duplicate_authors)
+            params=self._sanitize_params(duplicate_authors=duplicate_authors),
+            headers=self.headers
         )
         return response.json()
